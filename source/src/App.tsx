@@ -39,6 +39,7 @@ import {
 } from 'lucide-react'
 
 type GoalId = 'energy' | 'sleep' | 'fitness'
+type InsightId = 'screen-sleep' | 'food-workout' | 'movement-energy'
 type AreaId =
   | 'sleep'
   | 'energy'
@@ -57,6 +58,7 @@ type Route =
   | 'wearables'
   | 'loading'
   | 'today'
+  | 'brief'
   | 'focus'
   | 'area'
   | 'insights'
@@ -76,6 +78,7 @@ const goalOptions: Array<{
   title: string
   description: string
   icon: typeof Zap
+  disabled?: boolean
 }> = [
   {
     id: 'energy',
@@ -85,15 +88,16 @@ const goalOptions: Array<{
   },
   {
     id: 'sleep',
-    title: 'Sleep and recover better',
-    description: 'Understand what helps or disrupts your recovery.',
-    icon: Moon,
+    title: 'Improve overall health',
+    description: 'Understand what supports your energy, sleep, recovery, and habits.',
+    icon: HeartPulse,
   },
   {
     id: 'fitness',
     title: 'Improve fitness and body composition',
     description: 'Balance training, nutrition, movement, and recovery.',
     icon: Dumbbell,
+    disabled: true,
   },
 ]
 
@@ -123,7 +127,6 @@ const wearableOptions: Array<{
   { id: 'oura', label: 'Oura', short: 'O' },
   { id: 'garmin', label: 'Garmin', short: 'G' },
   { id: 'fitbit', label: 'Fitbit', short: 'F' },
-  { id: 'none', label: 'I do not use a wearable', short: '—' },
 ]
 
 const defaultProfile: ProfileState = {
@@ -135,7 +138,7 @@ const defaultProfile: ProfileState = {
 
 const goalMeta: Record<GoalId, { label: string; short: string }> = {
   energy: { label: 'Have more energy', short: 'Energy' },
-  sleep: { label: 'Sleep and recover better', short: 'Recovery' },
+  sleep: { label: 'Improve overall health', short: 'Health' },
   fitness: { label: 'Improve fitness and body composition', short: 'Fitness' },
 }
 
@@ -152,6 +155,7 @@ const routeFromHash = (): Route => {
     'wearables',
     'loading',
     'today',
+    'brief',
     'focus',
     'area',
     'insights',
@@ -170,7 +174,10 @@ function App() {
   })
   const [selectedFocus, setSelectedFocus] = useState('meal')
   const [selectedArea, setSelectedArea] = useState<AreaId>('sleep')
-  const [selectedInsight, setSelectedInsight] = useState('screen-sleep')
+  const [selectedInsight, setSelectedInsight] = useState<InsightId>('screen-sleep')
+  const [activeExperimentInsight, setActiveExperimentInsight] = useState<InsightId>(
+    () => (localStorage.getItem('leap-active-experiment-insight') as InsightId | null) ?? 'screen-sleep',
+  )
   const [experimentStarted, setExperimentStarted] = useState(
     localStorage.getItem('leap-experiment-started') === 'true',
   )
@@ -188,9 +195,12 @@ function App() {
     localStorage.setItem('leap-profile', JSON.stringify(profile))
   }, [profile])
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }, [route])
+
   const navigate = (next: Route) => {
     window.location.hash = `#/${next}`
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const showToast = (message: string) => {
@@ -204,6 +214,8 @@ function App() {
     setReminders({})
     localStorage.removeItem('leap-profile')
     localStorage.removeItem('leap-experiment-started')
+    localStorage.removeItem('leap-active-experiment-insight')
+    setActiveExperimentInsight('screen-sleep')
     navigate('welcome')
   }
 
@@ -217,7 +229,7 @@ function App() {
     navigate('area')
   }
 
-  const openInsight = (id: string) => {
+  const openInsight = (id: InsightId) => {
     setSelectedInsight(id)
     navigate('insight')
   }
@@ -244,6 +256,7 @@ function App() {
             showToast={showToast}
           />
         )}
+        {route === 'brief' && <BriefDetail profile={profile} navigate={navigate} />}
         {route === 'focus' && (
           <FocusDetail
             profile={profile}
@@ -276,10 +289,13 @@ function App() {
         {route === 'experiment-setup' && (
           <ExperimentSetup
             profile={profile}
+            insightId={selectedInsight}
             navigate={navigate}
             startExperiment={() => {
               setExperimentStarted(true)
+              setActiveExperimentInsight(selectedInsight)
               localStorage.setItem('leap-experiment-started', 'true')
+              localStorage.setItem('leap-active-experiment-insight', selectedInsight)
               navigate('experiments')
             }}
           />
@@ -287,11 +303,12 @@ function App() {
         {route === 'experiments' && (
           <ExperimentsScreen
             started={experimentStarted}
+            insightId={activeExperimentInsight}
             navigate={navigate}
             showToast={showToast}
           />
         )}
-        {route !== 'welcome' && route !== 'goals' && route !== 'areas' && route !== 'wearables' && route !== 'loading' && route !== 'focus' && route !== 'area' && route !== 'insight' && route !== 'experiment-setup' && (
+        {route !== 'welcome' && route !== 'goals' && route !== 'areas' && route !== 'wearables' && route !== 'loading' && route !== 'brief' && route !== 'focus' && route !== 'area' && route !== 'insight' && route !== 'experiment-setup' && (
           <BottomNav route={route} navigate={navigate} />
         )}
         {toast && <div className="toast"><Check size={16} />{toast}</div>}
@@ -444,8 +461,8 @@ function GoalsScreen({
           const primary = profile.primaryGoal === goal.id && selected
           const Icon = goal.icon
           return (
-            <div key={goal.id} className={`goal-card ${selected ? 'selected' : ''}`}>
-              <button className="goal-main" onClick={() => toggleGoal(goal.id)}>
+            <div key={goal.id} className={`goal-card ${selected ? 'selected' : ''} ${goal.disabled ? 'disabled' : ''}`}>
+              <button className="goal-main" disabled={goal.disabled} onClick={() => toggleGoal(goal.id)}>
                 <span className="selection-icon"><Icon size={21} /></span>
                 <span className="goal-text">
                   <strong>{goal.title}</strong>
@@ -655,15 +672,31 @@ function getPersonalizedContent(profile: ProfileState) {
       goalReason: 'to support more consistent energy',
       focusOrder: ['meal', 'walk', 'screen'],
       insightOrder: ['movement-energy', 'screen-sleep', 'food-workout'],
+      evidence: [
+        ['Sleep', '5h 48m', 'Shorter than your recent average'],
+        ['Activity load', 'High', 'Yesterday was 22% above average'],
+        ['First meal', '11:42 a.m.', 'Trending later than usual'],
+        ['Energy check-in', '6 / 10', 'Slightly below your norm'],
+      ],
+      interpretation: 'Leap connected shorter sleep, higher activity load, later fueling, and a lower morning check-in. The most relevant next step is a steadier recovery day, not a harder push.',
+      sources: ['Sleep data', 'Activity data', 'Sample nutrition log', 'Daily energy check-ins'],
     },
     sleep: {
-      title: 'Your recovery needs a gentler day',
-      brief: 'You slept less than usual and went to bed later after an active day. Protecting tonight’s wind-down and keeping activity moderate may help you restore a more consistent rhythm.',
-      opportunity: 'Your biggest opportunity today is sleep consistency',
-      opportunityCopy: 'Your bedtime was 54 minutes later than your recent average, and total sleep was 5 hours 48 minutes.',
-      goalReason: 'to support sleep and recovery',
-      focusOrder: ['screen', 'walk', 'meal'],
-      insightOrder: ['screen-sleep', 'food-workout', 'movement-energy'],
+      title: 'Your overall health signals need an easier day',
+      brief: 'Shorter sleep, later meal timing, and yesterday’s higher activity load are all pointing in the same direction. A steadier day with earlier food, light movement, and a cleaner wind-down may help your body reset.',
+      opportunity: 'Your biggest opportunity today is recovery rhythm',
+      opportunityCopy: 'Sleep, fueling, and activity load are the signals most out of pattern today.',
+      goalReason: 'to support overall health',
+      focusOrder: ['meal', 'walk', 'screen'],
+      insightOrder: ['movement-energy', 'screen-sleep', 'food-workout'],
+      evidence: [
+        ['Sleep', '5h 48m', 'Below your recent pattern'],
+        ['Meal timing', '11:42 a.m.', 'First meal has been drifting later'],
+        ['Activity load', 'High', 'Yesterday was above your usual range'],
+        ['Recovery rhythm', 'Uneven', 'Sleep, food, and movement are not aligned today'],
+      ],
+      interpretation: 'Leap is treating this as an overall-health day because several basic rhythms are off at the same time: sleep, fueling, and load. The recommended actions are meant to make today steadier.',
+      sources: ['Sleep data', 'Sample nutrition log', 'Activity data', 'Daily check-ins'],
     },
     fitness: {
       title: 'Today is better suited to recovery than intensity',
@@ -673,6 +706,14 @@ function getPersonalizedContent(profile: ProfileState) {
       goalReason: 'to support sustainable fitness progress',
       focusOrder: ['meal', 'walk', 'screen'],
       insightOrder: ['food-workout', 'screen-sleep', 'movement-energy'],
+      evidence: [
+        ['Activity load', 'High', 'Yesterday was above your usual range'],
+        ['Sleep', '5h 48m', 'Shorter than your recent average'],
+        ['Fueling', 'Later first meal', 'Recent timing has been inconsistent'],
+        ['Training direction', 'Moderate', 'Recovery-first movement fits today'],
+      ],
+      interpretation: 'Leap is prioritizing training readiness today because high load plus shorter sleep can make another hard effort less useful. Food timing and moderate movement are the most relevant levers.',
+      sources: ['Activity data', 'Sleep data', 'Sample nutrition log', 'Daily check-ins'],
     },
   }[primary]
   return content
@@ -736,7 +777,7 @@ function TodayScreen({
   profile: ProfileState
   openFocus: (id: string) => void
   openArea: (id: AreaId) => void
-  openInsight: (id: string) => void
+  openInsight: (id: InsightId) => void
   navigate: (route: Route) => void
   reminders: Record<string, boolean>
   setReminders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
@@ -768,7 +809,7 @@ function TodayScreen({
           <span><Salad size={13} /> Food log</span>
           <span><Zap size={13} /> Check-in</span>
         </div>
-        <button className="text-button light" onClick={() => openFocus(content.focusOrder[0])}>
+        <button className="text-button light" onClick={() => navigate('brief')}>
           See how Leap reached this <ArrowRight size={15} />
         </button>
       </section>
@@ -874,7 +915,7 @@ function getAreaCards(profile: ProfileState) {
   ]
   const goalPriority: Record<GoalId, AreaId[]> = {
     energy: ['energy', 'sleep', 'nutrition', 'screen', 'fitness'],
-    sleep: ['sleep', 'screen', 'biomarkers', 'stress', 'habits'],
+    sleep: ['sleep', 'energy', 'nutrition', 'biomarkers', 'screen'],
     fitness: ['fitness', 'biomarkers', 'nutrition', 'sleep', 'energy'],
   }
   return cards.sort((a, b) => {
@@ -884,6 +925,48 @@ function getAreaCards(profile: ProfileState) {
     const selectedB = profile.areas.includes(b.id) ? 0 : 1
     return selectedA - selectedB || (goalA === -1 ? 99 : goalA) - (goalB === -1 ? 99 : goalB) || a.priority - b.priority
   })
+}
+
+function BriefDetail({ profile, navigate }: { profile: ProfileState; navigate: (route: Route) => void }) {
+  const content = getPersonalizedContent(profile)
+  const sources = getSources(profile)
+  const sourceLabels = content.sources.map((source) => {
+    if (source === 'Activity data') return sources.activity
+    if (source === 'Sleep data') return sources.sleep
+    return source
+  })
+
+  return (
+    <main className="detail-screen">
+      <ScreenHeader title="Daily brief" back={() => navigate('today')} />
+      <div className="detail-hero padded">
+        <span className="detail-icon"><Sparkles size={25} /></span>
+        <span className="section-kicker">HOW LEAP REACHED THIS</span>
+        <h1>{content.title}</h1>
+        <p>{content.brief}</p>
+        <div className="goal-link"><Target size={15} /> Prioritized for {goalMeta[profile.primaryGoal].label.toLowerCase()}.</div>
+      </div>
+      <div className="detail-content padded">
+        <section className="metric-panel">
+          <span className="section-kicker">SIGNALS USED</span>
+          {content.evidence.map(([label, value, note]) => (
+            <div className="metric-row" key={label}><span>{label}</span><div><strong>{value}</strong><small>{note}</small></div></div>
+          ))}
+        </section>
+        <section className="connection-card">
+          <div className="connection-card-icon"><Sparkles size={19} /></div>
+          <div><span className="section-kicker">LEAP'S INTERPRETATION</span><p>{content.interpretation}</p></div>
+        </section>
+        <section className="explain-section">
+          <h2>Where this came from</h2>
+          <div className="source-list">
+            {sourceLabels.map((source) => <span key={source}><Check size={14} /> {source}</span>)}
+          </div>
+        </section>
+        <div className="association-note"><CircleHelp size={18} /><p>This is a demo explanation based on fictional sample data. It shows associations, not medical conclusions.</p></div>
+      </div>
+    </main>
+  )
 }
 
 function FocusDetail({
@@ -950,42 +1033,50 @@ function FocusDetail({
 function AreaDetail({ profile, areaId, navigate }: { profile: ProfileState; areaId: AreaId; navigate: (route: Route) => void }) {
   const area = getAreaCards(profile).find((item) => item.id === areaId) ?? getAreaCards(profile)[0]
   const Icon = area.icon
-  const contentByArea: Partial<Record<AreaId, { summary: string; metrics: Array<[string, string, string]>; observation: string }>> = {
+  const sources = getSources(profile)
+  const contentByArea: Partial<Record<AreaId, { summary: string; metrics: Array<[string, string, string]>; observation: string; sources: string[] }>> = {
     sleep: {
       summary: 'You slept less than usual and went to bed later than your recent pattern.',
       metrics: [['Duration', '5h 48m', '1h 07m below average'], ['Bedtime', '12:18 a.m.', '54m later than usual'], ['Consistency', 'Lower', '3 of 7 nights on time']],
       observation: 'Late phone use and a high-activity day both overlap with last night’s shorter sleep.',
+      sources: [sources.sleep, 'Phone Screen Time', 'Fictional daily check-in'],
     },
     energy: {
       summary: 'Four connected signals suggest your energy may be less stable today.',
       metrics: [['Morning check-in', '6 / 10', 'Slightly below usual'], ['Sleep', '5h 48m', 'Shorter than average'], ['First meal trend', '11:42 a.m.', 'Trending later']],
       observation: 'Earlier food and easy movement are the most practical things to test today.',
+      sources: ['Daily energy check-ins', sources.sleep, 'Sample nutrition log', sources.activity],
     },
     nutrition: {
       summary: 'Your meal timing has been less consistent over the last week.',
       metrics: [['First meal', '11:42 a.m.', '52m later than usual'], ['Protein consistency', '4 of 7 days', 'Below your recent target'], ['Last meal', '8:48 p.m.', 'Near usual']],
       observation: 'Later first meals have overlapped with lower afternoon energy in the sample profile.',
+      sources: ['Sample nutrition log', 'Daily energy check-ins'],
     },
     screen: {
       summary: 'Evening screen use has recently continued closer to sleep.',
       metrics: [['After 11 p.m.', '5 of 6 nights', 'Higher than usual'], ['Last phone use', '11:56 p.m.', '22m before sleep'], ['Evening total', '2h 18m', '31m above average']],
       observation: 'This is an early pattern, not proof. A seven-day experiment could make it more useful.',
+      sources: ['Phone Screen Time', sources.sleep],
     },
     fitness: {
       summary: 'Yesterday was a higher-load day, so moderate movement fits today’s recovery state.',
       metrics: [['Activity load', 'High', '22% above average'], ['Active minutes', '74 min', '18m above average'], ['Today’s direction', 'Moderate', 'Recovery-first']],
       observation: 'A 20-minute walk would keep momentum without adding much recovery demand.',
+      sources: [sources.activity, sources.recovery, 'Daily energy check-ins'],
     },
     biomarkers: {
       summary: 'Recovery-related trends are moderate rather than alarming.',
       metrics: [['HRV trend', 'Down slightly', 'Relative to 14-day range'], ['Resting heart rate', '+3 bpm', 'Above recent baseline'], ['Recovery direction', 'Moderate', 'Use context, not one number']],
       observation: 'Leap considers trends together with sleep and activity instead of treating one metric as a verdict.',
+      sources: [sources.recovery, sources.sleep, sources.activity],
     },
   }
   const content = contentByArea[areaId] ?? {
     summary: 'This area is close to your recent pattern and does not require much attention today.',
     metrics: [['Today', area.status, area.detail], ['Recent pattern', 'Stable', 'No major change'], ['Priority', 'Lower', 'Other areas matter more today']],
     observation: 'Leap still keeps this area visible while prioritizing the signals most connected to your goal.',
+    sources: ['Fictional daily check-in', 'Selected demo sources'],
   }
   return (
     <main className="detail-screen area-detail-screen">
@@ -1007,7 +1098,9 @@ function AreaDetail({ profile, areaId, navigate }: { profile: ProfileState; area
         </section>
         <section className="explain-section">
           <h2>Where this came from</h2>
-          <div className="source-list"><span><Watch size={14} /> {getSources(profile).sleep}</span><span><MessageCircle size={14} /> Fictional daily check-in</span></div>
+          <div className="source-list">
+            {content.sources.map((source) => <span key={source}><Check size={14} /> {source}</span>)}
+          </div>
         </section>
       </div>
     </main>
@@ -1015,7 +1108,7 @@ function AreaDetail({ profile, areaId, navigate }: { profile: ProfileState; area
 }
 
 type Insight = {
-  id: string
+  id: InsightId
   title: string
   summary: string
   tags: string[]
@@ -1025,6 +1118,21 @@ type Insight = {
   matters: Record<GoalId, string>
   tryText: string
   dataPoints: Array<{ date: string; signal: string; outcome: string }>
+  experiment: ExperimentConfig
+}
+
+type ExperimentConfig = {
+  title: string
+  description: string
+  plan: string[]
+  evaluate: Array<{ label: string; icon: typeof Clock3 }>
+  baseline: { label: string; value: string; detail: string }
+  target: { label: string; value: string; detail: string }
+  activeTitle: string
+  activeDescription: string
+  tonightTarget: string
+  reminderTime: string
+  reminderToast: string
 }
 
 const insightLibrary: Insight[] = [
@@ -1038,10 +1146,32 @@ const insightLibrary: Insight[] = [
     noticed: 'Late phone use repeatedly overlapped with later sleep and shorter sleep duration in the sample profile.',
     matters: {
       energy: 'More consistent evening screen habits may support better sleep, which may help your energy feel steadier during the day.',
-      sleep: 'Reducing late screen use gives you one clear behaviour to test against sleep timing and duration.',
+      sleep: 'Reducing late screen use gives you one clear behaviour to test against sleep timing, recovery, and next-day steadiness.',
       fitness: 'More consistent sleep may improve how prepared you feel for training and recovery.',
     },
     tryText: 'Stop phone use 30 minutes before bed for seven days.',
+    experiment: {
+      title: 'Finish phone use 30 minutes before bed',
+      description: 'A small, trackable test based on the late screen-use pattern Leap found in Maya’s sample data.',
+      plan: [
+        'Finish phone use by 10:45 p.m. each night.',
+        'Add a 10-second morning energy check-in.',
+        'Leap compares the seven days with the recent sample baseline.',
+      ],
+      evaluate: [
+        { label: 'Bedtime', icon: Clock3 },
+        { label: 'Sleep duration', icon: Moon },
+        { label: 'Consistency', icon: RefreshCcw },
+        { label: 'Morning energy', icon: Zap },
+      ],
+      baseline: { label: 'RECENT SAMPLE BASELINE', value: '5h 48m', detail: 'Last night’s sleep' },
+      target: { label: 'EXPERIMENT TARGET', value: '10:45', detail: 'Phone away' },
+      activeTitle: 'Evening screen-time experiment',
+      activeDescription: 'Finish phone use 30 minutes before bed and see what changes.',
+      tonightTarget: 'Finish screen use by 10:45 p.m.',
+      reminderTime: '10:15 p.m.',
+      reminderToast: 'Demo reminder added for 10:15 p.m.',
+    },
     dataPoints: [
       { date: 'Mon', signal: 'Phone until 11:43', outcome: '6h 02m sleep' },
       { date: 'Tue', signal: 'Phone until 11:51', outcome: '5h 54m sleep' },
@@ -1059,10 +1189,32 @@ const insightLibrary: Insight[] = [
     noticed: 'Workout difficulty ratings were higher after lower-intake days, especially when the first meal was also late.',
     matters: {
       energy: 'More consistent fueling may help you avoid the energy drop that follows a demanding workout.',
-      sleep: 'Adequate and consistent fueling can be considered alongside training load when interpreting recovery.',
+      sleep: 'Adequate and consistent fueling can be considered alongside sleep and training load when looking at overall health patterns.',
       fitness: 'This may help you plan food around training quality rather than automatically pushing harder or eating less.',
     },
     tryText: 'Eat a consistent pre-workout meal before your next three sessions.',
+    experiment: {
+      title: 'Eat a consistent pre-workout meal',
+      description: 'A small, trackable test based on the fueling and workout-difficulty pattern Leap found in Maya’s sample data.',
+      plan: [
+        'Eat a balanced meal 2 to 3 hours before your next three workouts.',
+        'Log workout difficulty within 30 minutes after each session.',
+        'Leap compares workout feel with recent lower-food and usual-food days.',
+      ],
+      evaluate: [
+        { label: 'Pre-workout fuel', icon: UtensilsCrossed },
+        { label: 'Workout difficulty', icon: Dumbbell },
+        { label: 'Energy after training', icon: Zap },
+        { label: 'Consistency', icon: RefreshCcw },
+      ],
+      baseline: { label: 'RECENT SAMPLE BASELINE', value: '3 of 4', detail: 'Hard workouts after lower-food days' },
+      target: { label: 'EXPERIMENT TARGET', value: '3 meals', detail: 'Before training' },
+      activeTitle: 'Pre-workout fueling experiment',
+      activeDescription: 'Eat a consistent pre-workout meal and compare how training feels.',
+      tonightTarget: 'Log your next planned pre-workout meal.',
+      reminderTime: '9:30 a.m.',
+      reminderToast: 'Demo reminder added for 9:30 a.m.',
+    },
     dataPoints: [
       { date: 'Jun 11', signal: 'Lower intake', outcome: 'Workout: very hard' },
       { date: 'Jun 14', signal: 'Usual intake', outcome: 'Workout: normal' },
@@ -1080,10 +1232,32 @@ const insightLibrary: Insight[] = [
     noticed: 'Earlier walks overlapped with better afternoon energy ratings more often than later or no walks.',
     matters: {
       energy: 'This is a low-effort behaviour with a visible connection to the outcome you care about most.',
-      sleep: 'Earlier movement may support a steadier daily rhythm without adding late-day stimulation.',
+      sleep: 'Earlier movement may support a steadier daily rhythm without adding late-day strain.',
       fitness: 'Morning walks can add consistent low-intensity movement while preserving recovery for training.',
     },
     tryText: 'Take a 15-minute walk before noon on five of the next seven days.',
+    experiment: {
+      title: 'Take a 15-minute walk before noon',
+      description: 'A small, trackable test based on the morning movement and energy pattern Leap found in Maya’s sample data.',
+      plan: [
+        'Walk for 15 minutes before noon on five of the next seven days.',
+        'Add a quick afternoon energy rating each day.',
+        'Leap compares walk days with your recent no-walk baseline.',
+      ],
+      evaluate: [
+        { label: 'Morning walk', icon: Footprints },
+        { label: 'Afternoon energy', icon: Zap },
+        { label: 'Recovery fit', icon: HeartPulse },
+        { label: 'Consistency', icon: RefreshCcw },
+      ],
+      baseline: { label: 'RECENT SAMPLE BASELINE', value: '5 / 10', detail: 'Energy after no morning walk' },
+      target: { label: 'EXPERIMENT TARGET', value: '5 days', detail: 'Walk before noon' },
+      activeTitle: 'Morning movement experiment',
+      activeDescription: 'Take a 15-minute walk before noon and see how afternoon energy changes.',
+      tonightTarget: 'Take a 15-minute walk before noon tomorrow.',
+      reminderTime: '9:00 a.m.',
+      reminderToast: 'Demo reminder added for 9:00 a.m.',
+    },
     dataPoints: [
       { date: 'Mon', signal: 'Walk at 9:12', outcome: 'Energy: 8/10' },
       { date: 'Tue', signal: 'No morning walk', outcome: 'Energy: 5/10' },
@@ -1113,7 +1287,7 @@ function InsightCard({ insight, onClick, featured = false }: { insight: Insight;
   )
 }
 
-function InsightsScreen({ profile, openInsight, navigate }: { profile: ProfileState; openInsight: (id: string) => void; navigate: (route: Route) => void }) {
+function InsightsScreen({ profile, openInsight, navigate }: { profile: ProfileState; openInsight: (id: InsightId) => void; navigate: (route: Route) => void }) {
   const insights = getInsights(profile)
   return (
     <main className="app-screen has-nav">
@@ -1140,7 +1314,7 @@ function InsightsScreen({ profile, openInsight, navigate }: { profile: ProfileSt
   )
 }
 
-function InsightDetail({ profile, insightId, navigate }: { profile: ProfileState; insightId: string; navigate: (route: Route) => void }) {
+function InsightDetail({ profile, insightId, navigate }: { profile: ProfileState; insightId: InsightId; navigate: (route: Route) => void }) {
   const insight = insightLibrary.find((item) => item.id === insightId) ?? insightLibrary[0]
   const Icon = insight.icon
   return (
@@ -1188,30 +1362,48 @@ function InsightDetail({ profile, insightId, navigate }: { profile: ProfileState
   )
 }
 
-function ExperimentSetup({ profile, navigate, startExperiment }: { profile: ProfileState; navigate: (route: Route) => void; startExperiment: () => void }) {
+function ExperimentSetup({
+  profile,
+  insightId,
+  navigate,
+  startExperiment,
+}: {
+  profile: ProfileState
+  insightId: InsightId
+  navigate: (route: Route) => void
+  startExperiment: () => void
+}) {
+  const insight = insightLibrary.find((item) => item.id === insightId) ?? insightLibrary[0]
+  const experiment = insight.experiment
+  const Icon = insight.icon
   return (
     <main className="detail-screen experiment-setup-screen">
       <ScreenHeader title="New experiment" back={() => navigate('insight')} />
       <div className="experiment-hero padded">
-        <div className="experiment-icon"><TimerReset size={29} /></div>
+        <div className="experiment-icon"><Icon size={29} /></div>
         <span className="section-kicker">7-DAY EXPERIMENT</span>
-        <h1>Finish phone use 30 minutes before bed</h1>
-        <p>A small, trackable test based on the pattern Leap found in Maya’s sample data.</p>
+        <h1>{experiment.title}</h1>
+        <p>{experiment.description}</p>
       </div>
       <div className="detail-content padded">
         <section className="experiment-plan">
           <h2>Your plan</h2>
-          <div className="plan-row"><span>1</span><p>Finish phone use by <strong>10:45 p.m.</strong> each night.</p></div>
-          <div className="plan-row"><span>2</span><p>Add a 10-second morning energy check-in.</p></div>
-          <div className="plan-row"><span>3</span><p>Leap compares the seven days with the recent sample baseline.</p></div>
+          {experiment.plan.map((step, index) => (
+            <div className="plan-row" key={step}><span>{index + 1}</span><p>{step}</p></div>
+          ))}
         </section>
         <section className="evaluate-card">
           <span className="section-kicker">LEAP WILL EVALUATE</span>
-          <div className="evaluate-grid"><span><Clock3 size={17} /> Bedtime</span><span><Moon size={17} /> Sleep duration</span><span><RefreshCcw size={17} /> Consistency</span><span><Zap size={17} /> Morning energy</span></div>
+          <div className="evaluate-grid">
+            {experiment.evaluate.map((item) => {
+              const EvaluateIcon = item.icon
+              return <span key={item.label}><EvaluateIcon size={17} /> {item.label}</span>
+            })}
+          </div>
         </section>
         <section className="baseline-card">
-          <div><small>RECENT SAMPLE BASELINE</small><strong>5h 48m</strong><span>Last night’s sleep</span></div>
-          <div><small>EXPERIMENT TARGET</small><strong>10:45</strong><span>Phone away</span></div>
+          <div><small>{experiment.baseline.label}</small><strong>{experiment.baseline.value}</strong><span>{experiment.baseline.detail}</span></div>
+          <div><small>{experiment.target.label}</small><strong>{experiment.target.value}</strong><span>{experiment.target.detail}</span></div>
         </section>
         <div className="association-note"><Info size={18} /><p>Leap will look for changes and associations. It will not assume this experiment caused the result.</p></div>
         <div className="goal-link"><Target size={15} /> This experiment supports your goal {goalMeta[profile.primaryGoal].label.toLowerCase()}.</div>
@@ -1223,8 +1415,21 @@ function ExperimentSetup({ profile, navigate, startExperiment }: { profile: Prof
   )
 }
 
-function ExperimentsScreen({ started, navigate, showToast }: { started: boolean; navigate: (route: Route) => void; showToast: (message: string) => void }) {
+function ExperimentsScreen({
+  started,
+  insightId,
+  navigate,
+  showToast,
+}: {
+  started: boolean
+  insightId: InsightId
+  navigate: (route: Route) => void
+  showToast: (message: string) => void
+}) {
   const [reminder, setReminder] = useState(false)
+  const insight = insightLibrary.find((item) => item.id === insightId) ?? insightLibrary[0]
+  const experiment = insight.experiment
+  const Icon = insight.icon
   if (!started) {
     return (
       <main className="app-screen has-nav">
@@ -1249,20 +1454,20 @@ function ExperimentsScreen({ started, navigate, showToast }: { started: boolean;
       <section className="padded">
         <article className="active-experiment-card">
           <div className="active-experiment-top"><span className="live-pill"><span /> ACTIVE</span><span>Day 1 of 7</span></div>
-          <div className="experiment-card-icon"><Smartphone size={23} /></div>
-          <h2>Evening screen-time experiment</h2>
-          <p>Finish phone use 30 minutes before bed and see what changes.</p>
+          <div className="experiment-card-icon"><Icon size={23} /></div>
+          <h2>{experiment.activeTitle}</h2>
+          <p>{experiment.activeDescription}</p>
           <div className="progress-track"><span style={{ width: '14%' }} /></div>
-          <div className="tonight-target"><div><small>TONIGHT’S TARGET</small><strong>Finish screen use by 10:45 p.m.</strong></div><Moon size={23} /></div>
+          <div className="tonight-target"><div><small>TODAY'S TARGET</small><strong>{experiment.tonightTarget}</strong></div><TimerReset size={23} /></div>
           <button
             className={`secondary-button ${reminder ? 'selected' : ''}`}
             onClick={() => {
               setReminder(!reminder)
-              showToast(reminder ? 'Reminder removed' : 'Demo reminder added for 10:15 p.m.')
+              showToast(reminder ? 'Reminder removed' : experiment.reminderToast)
             }}
           >
             {reminder ? <BellRing size={17} /> : <Bell size={17} />}
-            {reminder ? 'Reminder set for 10:15 p.m.' : 'Remind me at 10:15 p.m.'}
+            {reminder ? `Reminder set for ${experiment.reminderTime}` : `Remind me at ${experiment.reminderTime}`}
           </button>
         </article>
       </section>

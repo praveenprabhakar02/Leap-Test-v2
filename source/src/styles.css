@@ -61,20 +61,21 @@ button:focus-visible { outline: 3px solid rgba(46, 87, 68, 0.25); outline-offset
 .brand-lockup { display: inline-flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 850; text-transform: lowercase; margin-bottom: 34px; }
 .brand-mark { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--forest); color: white; }
 .eyebrow, .section-kicker, .step-label, .morning-label { color: #6e7872; font-size: 10px; font-weight: 850; letter-spacing: .14em; }
-.welcome-copy h1 { font-family: Georgia, 'Times New Roman', serif; font-size: 43px; line-height: 1.02; letter-spacing: -0.04em; margin: 10px 0 17px; max-width: 335px; font-weight: 500; }
+.welcome-copy { position: relative; z-index: 1; max-width: 315px; }
+.welcome-copy h1 { font-family: Georgia, 'Times New Roman', serif; font-size: 43px; line-height: 1.02; letter-spacing: -0.04em; margin: 10px 0 17px; max-width: 315px; font-weight: 500; }
 .welcome-subhead { color: #59645e; line-height: 1.57; font-size: 15px; margin: 0; }
 .welcome-actions { display: grid; gap: 16px; }
 .privacy-note { display: flex; gap: 10px; align-items: flex-start; color: #68716d; font-size: 11.5px; line-height: 1.45; padding: 0 4px; }
 .privacy-note svg { color: var(--forest-2); flex: 0 0 auto; margin-top: 1px; }
-.welcome-orbit { width: 250px; height: 250px; position: absolute; top: 40px; right: -82px; opacity: .72; }
+.welcome-orbit { width: 180px; height: 180px; position: absolute; top: 22px; right: -136px; opacity: .48; pointer-events: none; }
 .orbit { position: absolute; border: 1px solid rgba(46,87,68,.18); border-radius: 50%; inset: 18px; }
 .orbit-two { inset: 55px; }
-.orbit-center { position: absolute; width: 74px; height: 74px; border-radius: 50%; background: var(--forest); color: white; display: grid; place-items: center; left: 88px; top: 88px; box-shadow: 0 12px 30px rgba(32,63,50,.22); }
-.orbit-node { position: absolute; width: 44px; height: 44px; border-radius: 50%; background: white; color: var(--forest); display: grid; place-items: center; box-shadow: 0 9px 24px rgba(32,63,50,.12); }
-.node-one { top: 6px; left: 103px; }
-.node-two { right: 3px; top: 103px; }
-.node-three { bottom: 8px; left: 103px; }
-.node-four { left: 2px; top: 104px; }
+.orbit-center { position: absolute; width: 54px; height: 54px; border-radius: 50%; background: var(--forest); color: white; display: grid; place-items: center; left: 63px; top: 63px; box-shadow: 0 12px 30px rgba(32,63,50,.22); }
+.orbit-node { position: absolute; width: 36px; height: 36px; border-radius: 50%; background: white; color: var(--forest); display: grid; place-items: center; box-shadow: 0 9px 24px rgba(32,63,50,.12); }
+.node-one { top: 5px; left: 72px; }
+.node-two { right: 3px; top: 72px; }
+.node-three { bottom: 7px; left: 72px; }
+.node-four { left: 2px; top: 73px; }
 
 /* Onboarding */
 .onboarding-screen { padding-bottom: 100px; }
@@ -89,6 +90,8 @@ button:focus-visible { outline: 3px solid rgba(46, 87, 68, 0.25); outline-offset
 .selection-stack { display: grid; gap: 12px; }
 .goal-card { border: 1px solid var(--line); border-radius: 18px; background: white; overflow: hidden; transition: border .18s ease, box-shadow .18s ease; }
 .goal-card.selected { border-color: #94b49e; box-shadow: 0 9px 24px rgba(32,63,50,.08); }
+.goal-card.disabled { opacity: .45; background: #f5f4ef; }
+.goal-card.disabled .goal-main { cursor: not-allowed; }
 .goal-main { width: 100%; border: 0; background: transparent; display: grid; grid-template-columns: 42px 1fr 24px; gap: 12px; align-items: center; padding: 16px; text-align: left; cursor: pointer; }
 .selection-icon { width: 42px; height: 42px; border-radius: 13px; background: var(--sage-2); color: var(--forest-2); display: grid; place-items: center; }
 .goal-card.selected .selection-icon { background: var(--forest); color: white; }
